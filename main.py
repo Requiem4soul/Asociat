@@ -135,13 +135,41 @@ associations = {
     "Родина": [("Страна", 0.3), ("Народ", 0.3), ("Дом", 0.3), ("Общество", 0.2)],
 }
 
+
 # Функция для форматирования слова по правилам
 def format_word(word):
-    word = word.replace("ё", "е")  # Заменяем "ё" на "е"
-    return word.capitalize()  # Первая буква заглавная
+    word = word.replace("ё", "е")
+    return word.capitalize()
 
-# Настройка Selenium
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+
+# Функция для имитации человеческого ввода
+def human_typing(element, text):
+    # Рандомная задержка перед началом ввода от 1 до 3 секунд
+    initial_delay = random.uniform(1, 3)
+    print(f"Задержка перед вводом: {initial_delay:.2f} секунд")
+    time.sleep(initial_delay)
+
+    # Общее время ввода слова от 1 до 4 секунд
+    total_delay = random.uniform(1, 4)
+    per_char_delay = total_delay / len(text)  # Базовая задержка на символ
+
+    # Вводим слово по буквам с дополнительной рандомной задержкой
+    for char in text:
+        element.send_keys(char)
+        extra_delay = random.uniform(0.001, 0.2)
+        time.sleep(per_char_delay + extra_delay)
+
+
+# Настройка Selenium с маскировкой
+options = webdriver.ChromeOptions()
+options.add_argument(
+    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+options.add_experimental_option("excludeSwitches", ["enable-automation"])
+options.add_experimental_option("useAutomationExtension", False)
+
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
 driver.get("https://dictionary-exp-frontend.vercel.app/")
 
 # Логи
@@ -154,24 +182,24 @@ try:
     print("Страница авторизации загрузилась")
 
     # Авторизация
-    username_field = WebDriverWait(driver, 10).until(
+    username_field = WebDriverWait(driver, 5).until(
         EC.presence_of_element_located((By.XPATH, "//label[text()='Имя пользователя']/following-sibling::div/input"))
     )
-    password_field = WebDriverWait(driver, 10).until(
+    password_field = WebDriverWait(driver, 5).until(
         EC.presence_of_element_located((By.XPATH, "//label[text()='Пароль']/following-sibling::div/input"))
     )
-    login_button = WebDriverWait(driver, 10).until(
+    login_button = WebDriverWait(driver, 5).until(
         EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']"))
     )
 
-    username_field.send_keys("******")
-    password_field.send_keys("******")
+    human_typing(username_field, "******")
+    human_typing(password_field, "******")
     login_button.click()
 
     print("Авторизация прошла успешно!")
 
     # Ожидание загрузки страницы опроса (таблицы со словами)
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 5).until(
         EC.presence_of_element_located((By.XPATH, "//table/tbody/tr/td[1]"))
     )
     print("Страница опроса загрузилась")
@@ -182,31 +210,34 @@ try:
 
         # Извлекаем текущее слово
         try:
-            word_element = WebDriverWait(driver, 10).until(
+            word_element = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.XPATH, "//table/tbody/tr/td[1]"))
             )
             current_word = word_element.text.strip()
             print(f"Текущее слово: {current_word}")
         except Exception as e:
             print(f"Ошибка: не удалось найти слово на странице! ({e})")
-            driver.quit()
-            sys.exit(1)
+            print("Браузер остаётся открытым для анализа.")
+            while True:
+                time.sleep(1)
 
         # Проверяем наличие слова в словаре
         if current_word not in associations:
             print(f"Ошибка: слово '{current_word}' отсутствует в словаре ассоциаций!")
-            driver.quit()
-            sys.exit(1)
+            print("Браузер остаётся открытым для анализа.")
+            while True:
+                time.sleep(1)
 
         # Находим поле ввода
         try:
-            input_field = WebDriverWait(driver, 10).until(
+            input_field = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "input"))
             )
         except Exception as e:
             print(f"Ошибка: не удалось найти поле ввода! ({e})")
-            driver.quit()
-            sys.exit(1)
+            print("Браузер остаётся открытым для анализа.")
+            while True:
+                time.sleep(1)
 
         # Выбираем ассоциацию с вероятностью
         options, weights = zip(*associations[current_word])
@@ -214,43 +245,35 @@ try:
         formatted_association = format_word(association)
         print(f"Выбрана ассоциация: {formatted_association}")
 
-        # Вводим ассоциацию
+        # Вводим ассоциацию с имитацией человеческого ввода
         input_field.clear()
-        input_field.send_keys(formatted_association)
+        human_typing(input_field, formatted_association)
 
         # Находим и нажимаем кнопку "Далее"
         try:
-            next_button = WebDriverWait(driver, 10).until(
+            next_button = WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.XPATH, "//button[@type='submit']"))
             )
             if not next_button.is_enabled():
                 print("Ошибка: кнопка 'Далее' неактивна!")
-                driver.quit()
-                sys.exit(1)
+                print("Браузер остаётся открытым для анализа.")
+                while True:
+                    time.sleep(1)
             next_button.click()
             print("Кнопка 'Далее' нажата")
         except Exception as e:
-            print("Программа завершена. Браузер остаётся открытым для просмотра результата.")
-            # Браузер не закрывается, программа просто ждёт
+            print(f"Ошибка: не удалось найти или нажать кнопку 'Далее'! ({e})")
+            print("Браузер остаётся открытым для анализа.")
             while True:
-                time.sleep(1)  # Бесконечный цикл
-
-        # Случайная задержка от 4 до 8 секунд для каждого слова
-        delay = random.uniform(4, 8)
-        print(f"Ожидание {delay:.2f} секунд...")
-        time.sleep(delay)
+                time.sleep(1)
 
     print("Все 116 слов обработаны успешно!")
     print("Браузер остаётся открытым. Проверьте результат и нажмите финальную кнопку отправки, если требуется.")
     while True:
-        time.sleep(1)  # Бесконечный цикл, чтобы браузер оставался открытым
+        time.sleep(1)
 
 except Exception as e:
     print(f"Критическая ошибка: {e}")
     print("Браузер остаётся открытым для анализа ошибки.")
     while True:
-        time.sleep(1)  # Бесконечный цикл, чтобы браузер не закрылся
-
-# Закрываем браузер
-# driver.quit()
-# print("Программа завершена.")
+        time.sleep(1)
